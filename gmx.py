@@ -49,6 +49,12 @@ chainlink_btc_addr = "0x6ce185860a4963106506C203335A2910413708e9"
 chainlink_eth_addr = "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612"
 chainlink_link_addr = "0x86E53CF1B870786351Da77A57575e79CB55812CB"
 chainlink_uni_addr = "0x9C917083fDb403ab5ADbEC26Ee294f6EcAda2720"
+chainlink_dai_addr = "0xc5C8E77B397E531B8EC06BFb0048328B30E9eCfB"
+chainlink_usdc_addr = "0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3"
+chainlink_usdt_addr = "0x3f3f5dF88dC9F13eac63DF89EC16ef6e7E25DdE7"
+chainlink_mim_addr = "0x87121F6c9A9F6E90E59591E4Cf4804873f54A95b"
+chainlink_frax_addr = "0x0809E3d38d1B4214958faf06D8b1B1a2b73f2ab8"
+
 
 # Contracts
 weth_contract = arbiw3.eth.contract(address=Web3.to_checksum_address(weth.lower()), abi=abis.ERC20)
@@ -68,6 +74,11 @@ chainlink_btc_contract = arbiw3.eth.contract(address=chainlink_btc_addr, abi=abi
 chainlink_eth_contract = arbiw3.eth.contract(address=chainlink_eth_addr, abi=abis.CHAINLINK)
 chainlink_link_contract = arbiw3.eth.contract(address=chainlink_link_addr, abi=abis.CHAINLINK)
 chainlink_uni_contract = arbiw3.eth.contract(address=chainlink_uni_addr, abi=abis.CHAINLINK)
+chainlink_dai_contract = arbiw3.eth.contract(address=chainlink_dai_addr, abi=abis.CHAINLINK)
+chainlink_usdc_contract = arbiw3.eth.contract(address=chainlink_usdc_addr, abi=abis.CHAINLINK)
+chainlink_usdt_contract = arbiw3.eth.contract(address=chainlink_usdt_addr, abi=abis.CHAINLINK)
+chainlink_mim_contract = arbiw3.eth.contract(address=chainlink_mim_addr, abi=abis.CHAINLINK)
+chainlink_frax_contract = arbiw3.eth.contract(address=chainlink_frax_addr, abi=abis.CHAINLINK)
 
 # Chainlink datafeed to get current price of tokens
 def getPrice(coin):
@@ -84,6 +95,21 @@ def getPrice(coin):
 
         case "uni":
             latestData = chainlink_uni_contract.functions.latestRoundData().call()
+
+        case "dai":
+            latestData = chainlink_dai_contract.functions.latestRoundData().call()
+
+        case "usdc":
+            latestData = chainlink_usdc_contract.functions.latestRoundData().call()
+
+        case "usdt":
+            latestData = chainlink_usdt_contract.functions.latestRoundData().call()
+
+        case "mim":
+            latestData = chainlink_mim_contract.functions.latestRoundData().call()
+
+        case "frax":
+            latestData = chainlink_frax_contract.functions.latestRoundData().call()
 
     return latestData[1]/100000000.0
 
@@ -163,6 +189,7 @@ def wl_token_address(i):
 def pool_amounts(address):
     pool_amounts = vault_contract.functions.poolAmounts(address).call()
     decimals = vault_contract.functions.tokenDecimals(address).call()
+    print("DECIMALSSSS", decimals)
     return pool_amounts / 10 ** decimals
 
 def token_weights(address):

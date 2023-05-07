@@ -11,7 +11,6 @@ def match_chainlink_price(address):
             price = btc_price
             symbol = 'btc'
 
-
         case '0xf97f4df75117a78c1a5a0dbb814af92458539fb4': #link
             price = link_price
             symbol = 'link'
@@ -19,6 +18,26 @@ def match_chainlink_price(address):
         case '0xfa7f8980b0f1e64a2062791cc3b0871572f1f7f0': #uni
             price = uni_price
             symbol = 'uni'
+
+        case '0xda10009cbd5d07dd0cecc66161fc93d7c9000da1': #dai
+            price = dai_price
+            symbol = 'dai'
+
+        case '0xff970a61a04b1ca14834a43f5de4533ebddb5cc8': #usdc
+            price = usdc_price
+            symbol = 'usdc'
+
+        case '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9': #usdt
+            price = usdt_price
+            symbol = 'usdt'
+
+        case '0xfea7a6a0b346362bf88a9e4a88416b77a57d6c2a': #mim
+            price = mim_price
+            symbol = 'mim'
+
+        case '0x17fc002b466eec40dae837fc4be5c67993ddbd6f': #frax
+            price = frax_price
+            symbol = 'frax'
 
         case _:
             print("ERROR: A token was not matched by a chainlink data feed")
@@ -33,6 +52,11 @@ btc_price = gmx.getPrice("btc")
 eth_price = gmx.getPrice("eth")
 link_price = gmx.getPrice("link")
 uni_price = gmx.getPrice("uni")
+dai_price = gmx.getPrice("dai")
+usdc_price = gmx.getPrice("usdc")
+usdt_price = gmx.getPrice("usdt")
+mim_price = gmx.getPrice("mim")
+frax_price = gmx.getPrice("frax")
 
 
 ######################################################
@@ -57,7 +81,7 @@ glp_data = {}
 for i in range(0, nr_wl_tokens):
     # 2) Get the address of each whitelisted token and whether it is a stablecoin
     address, stable = gmx.wl_token_address(i)
-    print("Token:", address)
+    print("Token " + str(i) + ":", address)
     print("Stablecoin:", stable)
     # 3) Get the quantity of the token in the GLP vault
     quantity = gmx.pool_amounts(address)
@@ -65,26 +89,15 @@ for i in range(0, nr_wl_tokens):
     #print("Target weight:", gmx.token_weights(address), "\n")
 
     # 4) Get the token price from Chainlink feed
-    if not stable:
-        token_price, symbol = match_chainlink_price(address)
-        print("Token price:", token_price)
-        print("USD amount in the vault:", quantity * token_price, "\n")
-        glp_data[symbol] = {
-            'Address': address,
-            'Price': token_price,
-            'Quantity': quantity,
-            'TVL': quantity * token_price
-        }
-
-    else:
-        print("USD amount in the vault:", quantity, "\n") #stable assumed to be $1
-        glp_data['stable' + str(i)] = {
-            'Address': address,
-            'Price': 1,
-            'Quantity': quantity,
-            'TVL': quantity
-        }
-        
+    token_price, symbol = match_chainlink_price(address)
+    print("Token price:", token_price)
+    print("USD amount in the vault:", quantity * token_price, "\n")
+    glp_data[symbol] = {
+        'Address': address,
+        'Price': token_price,
+        'Quantity': quantity,
+        'TVL': quantity * token_price
+    }        
 
 # 5) Get the current weight of each token in the vault by multiplying Q*P and dividing by the total USD amount in the vault
 glp_tvl = sum(coin['TVL'] for coin in glp_data.values())
