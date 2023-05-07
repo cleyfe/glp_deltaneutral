@@ -78,19 +78,22 @@ for i in range(0, nr_wl_tokens):
 
     else:
         print("USD amount in the vault:", quantity, "\n") #stable assumed to be $1
-        glp_data[symbol] = {
+        glp_data['stable' + str(i)] = {
             'Address': address,
             'Price': 1,
             'Quantity': quantity,
-            'TVL': quantity * token_price
+            'TVL': quantity
         }
         
 
-print(glp_data)
+# 5) Get the current weight of each token in the vault by multiplying Q*P and dividing by the total USD amount in the vault
 glp_tvl = sum(coin['TVL'] for coin in glp_data.values())
-
 print("Total GLP TVL:", glp_tvl)
 
+for coin in glp_data.values():
+    coin['Weight'] = coin['TVL'] / glp_tvl
+
+print(glp_data)
 
 
 
