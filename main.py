@@ -1,6 +1,9 @@
 import gmx
+import aave
+import pandas as pd
 
-# Warning: this function is not dynamic if GMX adds new tokens to its whitelist!! (It will return an error)
+# Warning: this function is not dynamic. Error would arise if GMX adds new tokens to its whitelist!!
+# Warning 2: which oracle should we use? Chainlink or Gmx's or Aave's?
 def match_chainlink_price(address):
     match address.lower():
         case '0x82af49447d8a07e3bd95bd0d56f35241523fbab1': #weth
@@ -62,16 +65,12 @@ frax_price = gmx.getPrice("frax")
 ######################################################
 #Get GLP vault allocations
 #######################################################
-## Easy method but not dynamic:
-#glp_alloc = gmx.retrieve_allocation()
-#print(glp_alloc)
-
-## Dynamic method: 
 # 1) Determine the number of tokens that are whitelisted by GMX protocol
 # 2) Get the address of each whitelisted token and whether it is a stablecoin
 # 3) Get the quantity of the token in the GLP vault
 # 4) Get the token price from Chainlink feed
 # 5) Get the current weight of each token in the vault by multiplying Q*P and dividing by the total USD amount in the vault
+# 6) Identify hedging needs
 
 # 1) Determine the number of tokens that are whitelisted by GMX protocol
 nr_wl_tokens = gmx.wl_tokens()
@@ -81,55 +80,108 @@ glp_data = {}
 for i in range(0, nr_wl_tokens):
     # 2) Get the address of each whitelisted token and whether it is a stablecoin
     address, stable = gmx.wl_token_address(i)
-    print("Token " + str(i) + ":", address)
-    print("Stablecoin:", stable)
     # 3) Get the quantity of the token in the GLP vault
     quantity = gmx.pool_amounts(address)
-    print("Quantity in the vault:", quantity)
-    #print("Target weight:", gmx.token_weights(address), "\n")
-
     # 4) Get the token price from Chainlink feed
     token_price, symbol = match_chainlink_price(address)
-    print("Token price:", token_price)
-    print("USD amount in the vault:", quantity * token_price, "\n")
     glp_data[symbol] = {
         'Address': address,
+        'Stable': stable,
         'Price': token_price,
         'Quantity': quantity,
-        'TVL': quantity * token_price
+        'TVL': quantity * token_price,
+        'targetWeight': gmx.token_weights(address) / 10
     }        
 
 # 5) Get the current weight of each token in the vault by multiplying Q*P and dividing by the total USD amount in the vault
 glp_tvl = sum(coin['TVL'] for coin in glp_data.values())
-print("Total GLP TVL:", glp_tvl)
 
 for coin in glp_data.values():
     coin['Weight'] = coin['TVL'] / glp_tvl
 
-print(glp_data)
-
-
 
 
 #######################################################
-# Get user's wallet balances
+# Get Aave reserve assets data
 #######################################################
-# btc_balance = gmx.check_balance("btc")
-# print("BTC price:", btc_price, "BTC balance:", btc_balance)
-# eth_balance = gmx.check_balance("eth")
-# print("ETH price:", eth_price, "ETH balance:", eth_balance)
-# weth_balance = gmx.check_balance("weth")
-# print("WETH balance:", weth_balance)
-# usdc_balance  = gmx.check_balance("usdc")
-# udst_balance = gmx.check_balance("usdt")
+reserve_config, reserve_data = aave.reserve_tokens()
 
 #######################################################
-# Get GLP vault user's postions
+# Calculate the necessary inputs to compute final weights and orders
 #######################################################
+df_inputs = pd.DataFrame(columns=['gmx_weight', 'ltv', 'borrow_r', 'supply_r'])
+stablecoins_percentage = 1
 
-#gmx.lookupPositions(gmx.account.address, "btc")
-#gmx.lookupPositions(gmx.account.address, "eth")
+for coin in glp_data.values():
+    asset_in_aave = False #Check if the asset is available on Aave
 
-#current_pos = gmx.getPosition( gmx.account.address, "eth", "weth", True)
-#print(current_pos)
+    # Not Stable? To be hedged --> Fetch borrow rates
+    if not coin['Stable']:
+        print(f"Hedge {coin['Weight']} of {coin['Address']}")
+        stablecoins_percentage -= coin['Weight']
+        for a in reserve_data.values():
+            if a['Address'] == coin['Address']:
+                print()
+                asset_in_aave = True
+                df_inputs.loc[coin['Address']] = [coin['Weight'],"-",a['variableBorrowRate'],"-"]
+
+
+        if not asset_in_aave:
+            print("Token to be hedged is not available to supply in Aave")
+            df_inputs.loc[coin['Address']] = [coin['Weight'],"-","-","-"]
+
+
+    # Stable? Check if available in Aave and if can be used as collateral --> Fetch supply rate and LTV
+    else:
+        print(f"Check if {coin['Address']} is available to supply on Aave")
+        for a in reserve_config.values():
+            if a['Address'] == coin['Address']:
+                if a['Collateral']:
+                    for b in reserve_data.values():
+                        if b['Address'] == coin['Address']:
+                            df_inputs.loc[coin['Address']] = [coin['Weight'],a['LTV']/100,"-",b['liquidityRate']]
+                            asset_in_aave = True
+                
+                else:
+                    df_inputs.loc[coin['Address']] = [coin['Weight'],"-","-","-"]
+                    print("Stablecoin is not available as a collateral in Aave")
+
+        if not asset_in_aave:
+            df_inputs.loc[coin['Address']] = [coin['Weight'],"-","-","-"]
+            print("Stablecoin is not available to supply in Aave")
+
+
+print(df_inputs)
+adjustment_factor = 1 / (1-stablecoins_percentage)
+stable_aave_weight = df_inputs[df_inputs['ltv'] != '-']['gmx_weight'].sum()
+avg_ltv = (df_inputs[df_inputs['ltv'] != '-']['gmx_weight'] * df_inputs[df_inputs['ltv'] != '-']['ltv']).sum() / stable_aave_weight
+safe_ltv = 0.8 * avg_ltv
+borrow_cost = (df_inputs[df_inputs['borrow_r'] != '-']['gmx_weight'] * df_inputs[df_inputs['borrow_r'] != '-']['borrow_r']).sum()
+supply_profit = (df_inputs[df_inputs['supply_r'] != '-']['gmx_weight'] * df_inputs[df_inputs['supply_r'] != '-']['supply_r']).sum()  
+
+# print('Stable %:', stablecoins_percentage)
+# print('Adjustment factor:', adjustment_factor)
+# print('Average LTV:', avg_ltv)
+# print('Safe LTV weight:', safe_ltv)
+# print('Borrow APY:', borrow_cost)
+# print('Supply APY:', supply_profit)
+
+
+#######################################################
+# Compute weights to be allocated to GMX and Aave
+#######################################################
+# AuM % in Aave (aave_w) = 1 / (1 + LTV * (1/hw)); hw is the weight to be hedged away, i.e. 1 - stablecoins_percentage
+# AuM % in GMX (gmx_w) = 1 - aave_w
+
+hw = 1 - stablecoins_percentage
+aave_w = 1 / (1 + safe_ltv * (1/hw))
+gmx_w = 1 - aave_w
+
+print("Aave weight:", aave_w)
+print("GMX weight:", gmx_w)
+
+
+#######################################################
+# Prepare orders
+#######################################################
 

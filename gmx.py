@@ -19,14 +19,14 @@ arbiw3 = Web3(Web3.HTTPProvider(os.getenv("INFURA_ARBI")))
 print( "Connected Successfully to Web 3 Provider" if arbiw3.is_connected() else  "Web3 Provider Error")
 
 # Wallet
-private_key = os.environ.get("MAIN_PK")
-assert private_key is not None, "You must set MAIN_PK environment variable"
-assert private_key.startswith("0x"), "Private key must start with 0x hex prefix"
+#private_key = os.environ.get("MAIN_PK")
+#assert private_key is not None, "You must set MAIN_PK environment variable"
+#assert private_key.startswith("0x"), "Private key must start with 0x hex prefix"
 
-account: LocalAccount = Account.from_key(private_key)
-arbiw3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
-arbiw3.eth.default_account = account.address
-print("Your hot wallet address is " , arbiw3.eth.default_account)
+#account: LocalAccount = Account.from_key(private_key)
+#arbiw3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
+#arbiw3.eth.default_account = account.address
+#print("Your hot wallet address is " , arbiw3.eth.default_account)
 
 
 # Addresses (Used only as a reference. The contracts used are dynamically fetched using the wl_token_address function)
@@ -189,7 +189,6 @@ def wl_token_address(i):
 def pool_amounts(address):
     pool_amounts = vault_contract.functions.poolAmounts(address).call()
     decimals = vault_contract.functions.tokenDecimals(address).call()
-    print("DECIMALSSSS", decimals)
     return pool_amounts / 10 ** decimals
 
 def token_weights(address):
